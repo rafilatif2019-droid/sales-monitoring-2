@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, Chat, FunctionDeclaration, Type, FunctionResponsePart, Part } from '@google/genai';
 import { useAppContext } from '../contexts/AppContext';
-import useLocalStorage from '../hooks/useLocalStorage';
-import { StoreLevel, ProductType } from '../types';
+import { StoreLevel, ProductType, ChatEntry } from '../types';
 import { PaperAirplaneIcon } from '../components/icons';
 
 // A simple component to render bot messages with basic formatting
@@ -25,40 +25,33 @@ const BotMessage: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-interface ChatEntry {
-    role: 'user' | 'model';
-    parts: Part[];
-}
-
 const CHAT_HISTORY_LIMIT = 50;
 
 const Chat: React.FC = () => {
-    const { stores, addStore, deleteStore, products, addProduct, sales } = useAppContext();
-    const [history, setHistory] = useLocalStorage<ChatEntry[]>('chatHistory', []);
+    const { user, stores, addStore, deleteStore, products, addProduct, sales, chatHistory, setChatHistory } = useAppContext();
     const [loading, setLoading] = useState(true);
     const [input, setInput] = useState('');
     const chatRef = useRef<Chat | null>(null);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
+    const isMounted = useRef(true);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
     const messages = useMemo(() => {
-        return history
-            .map(entry => {
-                const textPart = entry.parts.find(part => 'text' in part) as { text: string } | undefined;
-                return {
-                    role: entry.role,
-                    text: textPart?.text ?? ''
-                };
-            })
+        return chatHistory
+            .map(entry => ({
+                role: entry.role,
+                text: entry.parts[0]?.text ?? ''
+            }))
             .filter(msg => msg.text.trim() !== ''); // Only show messages with actual text
-    }, [history]);
+    }, [chatHistory]);
     
     useEffect(scrollToBottom, [messages, loading]);
     
     useEffect(() => {
+        isMounted.current = true;
         const tools: FunctionDeclaration[] = [
             { name: "listStores", description: "Get a list of all stores Rapi is currently managing.", parameters: { type: Type.OBJECT, properties: {} } },
             { name: "addStore", description: "Add a new store to the list.", parameters: { type: Type.OBJECT, properties: { name: { type: Type.STRING, description: "The name of the new store." }, level: { type: Type.STRING, description: `The store level. Must be one of: "${Object.values(StoreLevel).join('", "')}".` } }, required: ["name", "level"] } },
@@ -69,12 +62,26 @@ const Chat: React.FC = () => {
         ];
 
         const initChat = async () => {
+            if (!user) { // Guest mode initialization
+                setLoading(false);
+                if (chatHistory.length === 0) {
+                     setChatHistory([{ role: 'model', parts: [{ text: "Halo Rapi! Aku Selvy, asisten AI-mu. Kamu bisa tanya apa saja, tapi untuk menyimpan percakapan atau mengubah data, kamu perlu otorisasi dulu ya!" }] }]);
+                }
+                return;
+            }
+            
             setLoading(true);
             try {
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                // Re-create chat with persisted history
+                const fullHistoryForGemini = chatHistory.map(entry => ({
+                    role: entry.role,
+                    parts: entry.parts
+                }));
+                
                 const newChat = ai.chats.create({
                     model: 'gemini-2.5-flash',
-                    history: history, // Load persisted history
+                    history: fullHistoryForGemini,
                     config: {
                         systemInstruction: "Kamu adalah Selvy, asisten AI yang jenius dan sangat ahli dalam mengelola target penjualan. Kamu membantu pengguna bernama Rapi. Gaya bicaramu sangat friendly, suportif, dan tidak kaku. Kamu memiliki akses ke fungsi-fungsi aplikasi untuk membantu Rapi. Sapa Rapi dengan namanya saat memulai percakapan dan berikan ringkasan singkat tentang apa yang bisa kamu bantu.",
                         tools: [{ functionDeclarations: tools }],
@@ -82,40 +89,57 @@ const Chat: React.FC = () => {
                 });
                 chatRef.current = newChat;
 
-                if (history.length === 0) {
+                if (chatHistory.length === 0) {
                     const initialUserEntry: ChatEntry = { role: 'user', parts: [{ text: "Halo, perkenalkan dirimu." }] };
-                    const response = await newChat.sendMessage({ message: initialUserEntry.parts });
-                    const initialModelEntry: ChatEntry = { role: 'model', parts: response.candidates[0].content.parts };
-                    setHistory([initialUserEntry, initialModelEntry]);
+                    const response = await newChat.sendMessageStream({ message: initialUserEntry.parts });
+                    let responseText = '';
+                    for await (const chunk of response) {
+                        responseText += chunk.text;
+                    }
+                    const initialModelEntry: ChatEntry = { role: 'model', parts: [{ text: responseText }] };
+                    if(isMounted.current) setChatHistory([initialUserEntry, initialModelEntry]);
                 }
             } catch (error) {
                 console.error("Failed to initialize chat:", error);
-                setHistory([{ role: 'model', parts: [{ text: "Waduh, sepertinya Selvy lagi ada sedikit kendala nih buat terhubung. Coba refresh halaman ini ya, Rapi." }] }]);
+                if(isMounted.current) setChatHistory([{ role: 'model', parts: [{ text: "Waduh, sepertinya Selvy lagi ada sedikit kendala nih buat terhubung. Coba refresh halaman ini ya, Rapi." }] }]);
             } finally {
-                setLoading(false);
+                if(isMounted.current) setLoading(false);
             }
         };
 
         initChat();
+
+        return () => {
+            isMounted.current = false;
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [user]); // Re-initialize chat when user logs in/out
 
     const sendMessage = async (messageText: string) => {
-        if (!chatRef.current) return;
+        setChatHistory(prev => {
+            const userEntry: ChatEntry = { role: 'user', parts: [{ text: messageText }] };
+            return [...prev, userEntry].slice(-CHAT_HISTORY_LIMIT);
+        });
+
+        if (!user || !chatRef.current) {
+            setChatHistory(prev => {
+                const modelEntry: ChatEntry = { role: 'model', parts: [{ text: "Untuk bisa ngobrol dan pakai fungsiku, kamu harus otorisasi dulu ya. Coba deh cek di halaman 'Settings' atau coba tambah data." }] };
+                return [...prev, modelEntry].slice(-CHAT_HISTORY_LIMIT);
+            });
+            return;
+        }
+
         setLoading(true);
         
-        const userEntry: ChatEntry = { role: 'user', parts: [{ text: messageText }] };
-        let updatedHistory = [...history, userEntry];
-        setHistory(updatedHistory.slice(-CHAT_HISTORY_LIMIT));
-
         try {
-            let response = await chatRef.current.sendMessage({ message: userEntry.parts });
+            // Convert simplified history to full Part[] for Gemini
+            const fullParts: Part[] = [{ text: messageText }];
+            let response = await chatRef.current.sendMessage({ message: fullParts });
             
             while(response.functionCalls && response.functionCalls.length > 0) {
-                const modelFunctionCallEntry: ChatEntry = { role: 'model', parts: response.candidates[0].content.parts };
-                updatedHistory = [...updatedHistory, modelFunctionCallEntry];
-                setHistory(updatedHistory.slice(-CHAT_HISTORY_LIMIT));
-                
+                 const modelFunctionCallEntry: ChatEntry = { role: 'model', parts: response.candidates[0].content.parts.map(p => ({ text: JSON.stringify(p) }))}; // Simple storage
+                 setChatHistory(prev => [...prev, modelFunctionCallEntry].slice(-CHAT_HISTORY_LIMIT));
+
                 const functionCall = response.functionCalls[0];
                 const { name, args, id } = functionCall;
                 let result: any;
@@ -132,21 +156,19 @@ const Chat: React.FC = () => {
                 } catch (error) { result = `Terjadi error: ${(error as Error).message}`; }
 
                 const functionResponsePart: FunctionResponsePart = { functionResponse: { id, name, response: { result: typeof result !== 'string' ? JSON.stringify(result) : result } } };
-                const toolEntry: ChatEntry = { role: 'user', parts: [functionResponsePart] };
-                updatedHistory = [...updatedHistory, toolEntry];
-                setHistory(updatedHistory.slice(-CHAT_HISTORY_LIMIT));
+                const toolEntry: ChatEntry = { role: 'user', parts: [{ text: `[Function Response for ${name}]` }] }; // Simplified for display
+                setChatHistory(prev => [...prev, toolEntry].slice(-CHAT_HISTORY_LIMIT));
 
                 response = await chatRef.current.sendMessage({ message: [functionResponsePart] });
             }
             
             const finalModelEntry: ChatEntry = { role: 'model', parts: response.candidates[0].content.parts };
-            updatedHistory = [...updatedHistory, finalModelEntry];
-            setHistory(updatedHistory.slice(-CHAT_HISTORY_LIMIT));
+             setChatHistory(prev => [...prev, finalModelEntry].slice(-CHAT_HISTORY_LIMIT));
 
         } catch(e) {
             console.error(e);
             const errorEntry: ChatEntry = { role: 'model', parts: [{text: "Aduh, maaf Rapi. Selvy lagi pusing nih, coba tanya lagi ya."}]};
-            setHistory(prev => [...prev, errorEntry].slice(-CHAT_HISTORY_LIMIT));
+            setChatHistory(prev => [...prev, errorEntry].slice(-CHAT_HISTORY_LIMIT));
         } finally {
             setLoading(false);
         }

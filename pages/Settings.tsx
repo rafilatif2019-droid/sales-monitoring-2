@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Settings, StoreLevel } from '../types';
 import { STORE_LEVELS } from '../constants';
 import { ArchiveBoxArrowDownIcon, ArchiveBoxArrowUpIcon, TrashIcon } from '../components/icons';
 
 const SettingsPage: React.FC = () => {
   const { settings, updateSettings, backupData, restoreData, resetApp } = useAppContext();
+  const { currentUser, logout, requestAuthorization } = useAuth();
   const [formState, setFormState] = useState<Settings>(settings);
   const [isSaved, setIsSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,8 +39,10 @@ const SettingsPage: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings(formState);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
+    if(currentUser) { // Only show saved message if logged in
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+    }
   };
 
   const handleRestoreClick = () => {
@@ -49,7 +53,6 @@ const SettingsPage: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     restoreData(file);
-    // Reset file input value to allow re-uploading the same file
     if(event.target) {
         event.target.value = '';
     }
@@ -61,6 +64,34 @@ const SettingsPage: React.FC = () => {
       <h2 className="text-3xl font-bold mb-6">Pusat Kontrol</h2>
       
       <div className="space-y-12">
+
+        {/* Account Management */}
+        <div className="bg-slate-800 p-8 rounded-lg">
+           <h3 className="text-xl font-bold mb-4 border-b border-slate-700 pb-2">Akun</h3>
+           {currentUser ? (
+             <div className="flex justify-between items-center">
+               <div>
+                  <p className="text-sm text-slate-400">Anda login sebagai:</p>
+                  <p className="text-lg font-semibold text-white">{currentUser.name}</p>
+               </div>
+               <button onClick={logout} className="bg-slate-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-slate-500 transition-colors">
+                   Logout
+                </button>
+             </div>
+           ) : (
+             <div className="flex justify-between items-center">
+               <div>
+                  <p className="text-sm text-slate-400">Anda sedang dalam mode tamu.</p>
+                  <p className="text-lg font-semibold text-white">Login untuk Menyimpan Data</p>
+               </div>
+               <button onClick={requestAuthorization} className="bg-brand-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-brand-500 transition-colors">
+                   Otorisasi
+                </button>
+             </div>
+           )}
+        </div>
+
+
         {/* Core Configuration Form */}
         <form onSubmit={handleSubmit} className="space-y-8 bg-slate-800 p-8 rounded-lg">
           <div>
@@ -114,7 +145,7 @@ const SettingsPage: React.FC = () => {
         {/* Data Management Zone */}
         <div className="bg-slate-800/50 p-8 rounded-lg border-2 border-red-900/50">
           <h3 className="text-xl font-bold text-red-400 mb-2">Zona Manajemen Data</h3>
-          <p className="text-slate-400 text-sm mb-6">Aksi di bawah ini akan memengaruhi seluruh data aplikasi. Lakukan dengan hati-hati.</p>
+          <p className="text-slate-400 text-sm mb-6">Aksi di bawah ini memerlukan otorisasi dan akan memengaruhi seluruh data aplikasi Anda. Lakukan dengan hati-hati.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button onClick={backupData} className="flex flex-col items-center justify-center gap-2 bg-slate-700 text-slate-200 font-semibold py-4 px-4 rounded-md hover:bg-slate-600 transition-colors">
                   <ArchiveBoxArrowDownIcon />

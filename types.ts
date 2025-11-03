@@ -1,4 +1,4 @@
-
+import React from 'react';
 
 export enum StoreLevel {
   WS1 = "Ws 1",
@@ -54,7 +54,19 @@ export interface Notification {
     message: string;
 }
 
+export interface User {
+    id: string;
+    name: string;
+    accessCode: string;
+}
+
+export interface ChatEntry {
+    role: 'user' | 'model';
+    parts: { text: string }[]; // Simplified for context storage
+}
+
 export interface AppContextType {
+    user: User | null;
     stores: Store[];
     addStore: (store: Omit<Store, 'id'>) => void;
     updateStore: (store: Store) => void;
@@ -65,6 +77,7 @@ export interface AppContextType {
     addProduct: (product: Omit<Product, 'id' | 'isActive'>) => void;
     updateProduct: (product: Product) => void;
     toggleProductStatus: (id: string) => void;
+    bulkUpsertProducts: (products: Omit<Product, 'id' | 'isActive'>[]) => void;
 
     sales: Sale[];
     logSale: (sale: Omit<Sale, 'date'>) => void;
@@ -75,6 +88,9 @@ export interface AppContextType {
 
     dailyVisitPlan: DailyVisitPlan;
     setDailyVisitPlan: (plan: DailyVisitPlan) => void;
+
+    chatHistory: ChatEntry[];
+    setChatHistory: React.Dispatch<React.SetStateAction<ChatEntry[]>>;
 
     backupData: () => void;
     restoreData: (backupFile: File) => void;

@@ -1,5 +1,9 @@
 
+
 import React, { useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { AppProvider } from './contexts/AppContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Dashboard from './pages/Dashboard';
 import Stores from './pages/Stores';
 import Targets from './pages/Targets';
@@ -11,7 +15,7 @@ import useDeadlineNotifier from './hooks/useDeadlineNotifier';
 
 type Page = 'dashboard' | 'stores' | 'targets' | 'settings' | 'chat';
 
-const App: React.FC = () => {
+const MainApp: React.FC = () => {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   useDeadlineNotifier();
 
@@ -74,6 +78,19 @@ const App: React.FC = () => {
         {renderPage()}
       </main>
     </div>
+  );
+};
+
+
+const App: React.FC = () => {
+  const { currentUser } = useAuth();
+  
+  return (
+    <AppProvider user={currentUser}>
+      <NotificationProvider>
+        <MainApp />
+      </NotificationProvider>
+    </AppProvider>
   );
 };
 

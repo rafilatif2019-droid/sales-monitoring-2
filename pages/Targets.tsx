@@ -1,8 +1,11 @@
-import React, { useState, useEffect, ReactNode } from 'react';
+
+
+import React, { useState, useEffect, ReactNode, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { Product, ProductType, StoreLevel } from '../types';
 import Modal from '../components/Modal';
-import { PlusIcon } from '../components/icons';
+import Popover from '../components/Popover';
+import { PlusIcon, UploadIcon, InformationCircleIcon } from '../components/icons';
 import { STORE_LEVELS } from '../constants';
 import PhaseCountdown from '../components/PhaseCountdown';
 
@@ -173,9 +176,11 @@ const ProductList: React.FC<{ products: Product[], title: string, description: s
 
 
 const Targets: React.FC = () => {
-    const { products, toggleProductStatus } = useAppContext();
+    const { products, toggleProductStatus, bulkUpsertProducts } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [guideAnchorEl, setGuideAnchorEl] = useState<HTMLElement | null>(null);
     const [productToEdit, setProductToEdit] = useState<Product | undefined>(undefined);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     const ddProducts = products.filter(p => p.type === ProductType.DD);
     const fokusProducts = products.filter(p => p.type === ProductType.Fokus);
@@ -190,21 +195,152 @@ const Targets: React.FC = () => {
         setIsModalOpen(false);
     };
 
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+    
+    const handleGuideClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+        setGuideAnchorEl(guideAnchorEl ? null : event.currentTarget);
+    };
+
+    const handleCloseGuide = () => {
+        setGuideAnchorEl(null);
+    };
+
+    const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            if (!text) {
+                alert("File kosong atau tidak bisa dibaca.");
+                return;
+            }
+
+            const rows = text.split('\n').map(row => row.trim()).filter(Boolean);
+            const headerRow = rows.shift()?.toLowerCase().replace(/\r/g, '');
+            const headers = headerRow?.split(',') || [];
+            
+            const expectedHeaders = ['name', 'baseprice', 'targetws1', 'targetws2', 'targetritell', 'targetritel', 'targetothers'];
+            
+            if (JSON.stringify(headers) !== JSON.stringify(expectedHeaders)) {
+                alert("Format header CSV tidak sesuai. Klik ikon (?) untuk panduan format.");
+                return;
+            }
+
+            const newProducts: Omit<Product, 'id' | 'isActive'>[] = [];
+            const errorLines: number[] = [];
+            
+            rows.forEach((row, index) => {
+                const values = row.split(',');
+                const lineNumber = index + 2;
+
+                if (values.length !== expectedHeaders.length) {
+                    errorLines.push(lineNumber);
+                    return;
+                }
+                
+                const name = values[0].trim();
+                const basePrice = parseFloat(values[1]);
+
+                if (!name || isNaN(basePrice)) {
+                    errorLines.push(lineNumber);
+                    return;
+                }
+
+                const targetCoverage: { [key in StoreLevel]?: number } = {};
+                const storeLevelKeys: StoreLevel[] = [StoreLevel.WS1, StoreLevel.WS2, StoreLevel.RitelL, StoreLevel.Ritel, StoreLevel.Others];
+                
+                values.slice(2).forEach((targetStr, i) => {
+                    const percentage = parseInt(targetStr, 10);
+                    if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
+                        targetCoverage[storeLevelKeys[i]] = percentage;
+                    }
+                });
+                
+                newProducts.push({
+                    name,
+                    type: ProductType.DD,
+                    basePrice,
+                    targetCoverage
+                });
+            });
+
+            if (newProducts.length > 0) {
+                bulkUpsertProducts(newProducts);
+            }
+            
+            if (errorLines.length > 0) {
+                alert(`Beberapa baris gagal diimpor (baris ke: ${errorLines.join(', ')}). Pastikan format angka dan jumlah kolom sudah benar.`);
+            }
+        };
+
+        reader.readAsText(file);
+
+        if(event.target) {
+            event.target.value = '';
+        }
+    };
+
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                 <h2 className="text-3xl font-bold">Manajemen Target Produk</h2>
-                <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-brand-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-brand-500 transition-colors">
-                    <PlusIcon />
-                    <span>Tambah Produk</span>
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={handleImportClick} className="flex items-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-slate-500 transition-colors">
+                        <UploadIcon />
+                        <span>Import Distribusi Drive</span>
+                    </button>
+                    <button onClick={handleGuideClick} className="p-2 bg-slate-600 text-white rounded-md hover:bg-slate-500 transition-colors" aria-label="Tampilkan panduan import">
+                        <InformationCircleIcon />
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".csv" />
+                    <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-brand-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-brand-500 transition-colors">
+                        <PlusIcon />
+                        <span>Tambah Produk</span>
+                    </button>
+                </div>
             </div>
             
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={productToEdit ? 'Edit Produk Target' : 'Tambah Produk Target Baru'}>
                 <ProductForm onClose={handleCloseModal} productToEdit={productToEdit} />
             </Modal>
+
+            <Popover
+                isOpen={Boolean(guideAnchorEl)}
+                onClose={handleCloseGuide}
+                anchorEl={guideAnchorEl}
+                title="Panduan Import Distribusi Drive via CSV"
+            >
+                 <div className="prose prose-invert prose-sm text-slate-300 max-w-none">
+                    <p>Untuk mengimpor beberapa produk 'Distribusi Drive' sekaligus, siapkan file CSV dengan format berikut:</p>
+                    <ol>
+                        <li>Baris pertama <strong>harus</strong> menjadi header dengan judul kolom yang sama persis seperti di bawah ini.</li>
+                        <li>Gunakan koma (,) sebagai pemisah antar kolom.</li>
+                    </ol>
+                    <p className="font-bold">Header Wajib:</p>
+                    <pre className="block bg-slate-900 p-2 rounded text-brand-300 overflow-x-auto">
+                        <code>name,baseprice,targetws1,targetws2,targetritell,targetritel,targetothers</code>
+                    </pre>
+                    <p className="font-bold">Penjelasan Kolom:</p>
+                    <ul>
+                        <li><code>name</code>: Nama produk.</li>
+                        <li><code>baseprice</code>: Harga dasar (hanya angka).</li>
+                        <li><code>targetws1</code>: Target cakupan untuk level <strong>Ws 1</strong> (angka 0-100). Kosongkan jika tidak ada.</li>
+                        <li><code>targetws2</code>: Target cakupan untuk <strong>Ws 2</strong>.</li>
+                        <li><code>targetritell</code>: Target cakupan untuk <strong>Ritel L</strong>.</li>
+                        <li><code>targetritel</code>: Target cakupan untuk <strong>Ritel</strong>.</li>
+                        <li><code>targetothers</code>: Target cakupan untuk <strong>Others</strong>.</li>
+                    </ul>
+                     <p className="font-bold">Contoh Baris Data:</p>
+                    <code className="block bg-slate-900 p-2 rounded text-brand-300">SEDAAP MIE GORENG,95000,70,60,50,40,</code>
+                    <p className="mt-4 text-xs text-yellow-400"><strong>Catatan:</strong> Jika produk dengan nama yang sama sudah ada, data harga dan targetnya akan diperbarui. Jika belum ada, produk baru akan dibuat.</p>
+                </div>
+            </Popover>
             
-            <div className="space-y-8">
+            <div className="space-y-8 mt-6">
                 <ProductList 
                     products={ddProducts} 
                     title="Distribusi Drive" 

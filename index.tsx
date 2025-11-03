@@ -1,9 +1,9 @@
 
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { AppProvider } from './contexts/AppContext';
-import { NotificationProvider } from './contexts/NotificationContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -13,10 +13,8 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <AppProvider>
-      <NotificationProvider>
-        <App />
-      </NotificationProvider>
-    </AppProvider>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </React.StrictMode>
 );

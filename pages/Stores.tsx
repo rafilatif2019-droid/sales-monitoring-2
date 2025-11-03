@@ -5,7 +5,8 @@ import { useAppContext } from '../contexts/AppContext';
 import { Store, StoreLevel } from '../types';
 import { STORE_LEVELS } from '../constants';
 import Modal from '../components/Modal';
-import { PlusIcon, UploadIcon, SearchIcon, PencilSquareIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon } from '../components/icons';
+import Popover from '../components/Popover';
+import { PlusIcon, UploadIcon, SearchIcon, PencilSquareIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, InformationCircleIcon } from '../components/icons';
 
 const StoreForm: React.FC<{
     onClose: () => void;
@@ -77,6 +78,7 @@ type SortDirection = 'ascending' | 'descending';
 const Stores: React.FC = () => {
     const { stores, deleteStore, bulkAddStores } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [guideAnchorEl, setGuideAnchorEl] = useState<HTMLElement | null>(null);
     const [storeToEdit, setStoreToEdit] = useState<Store | undefined>(undefined);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -95,6 +97,14 @@ const Stores: React.FC = () => {
     
     const handleImportClick = () => {
         fileInputRef.current?.click();
+    };
+
+    const handleGuideClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+        setGuideAnchorEl(guideAnchorEl ? null : event.currentTarget);
+    };
+
+    const handleCloseGuide = () => {
+        setGuideAnchorEl(null);
     };
     
     const handleLevelFilter = (level: StoreLevel) => {
@@ -154,7 +164,7 @@ const Stores: React.FC = () => {
             const header = rows.shift()?.toLowerCase().replace(/\r/g, '');
 
             if (header !== 'name,level') {
-                alert('Format CSV tidak valid. Header harus "name,level".');
+                alert("Format header CSV tidak sesuai. Harap gunakan format: name,level");
                 return;
             }
 
@@ -211,6 +221,9 @@ const Stores: React.FC = () => {
                         <UploadIcon />
                         <span>Import CSV</span>
                     </button>
+                    <button onClick={handleGuideClick} className="p-2 bg-slate-600 text-white rounded-md hover:bg-slate-500 transition-colors" aria-label="Tampilkan panduan import">
+                        <InformationCircleIcon />
+                    </button>
                     <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-brand-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-brand-500 transition-colors">
                         <PlusIcon />
                         <span>Tambah Toko</span>
@@ -262,6 +275,36 @@ const Stores: React.FC = () => {
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={storeToEdit ? 'Edit Toko' : 'Tambah Toko Baru'}>
                 <StoreForm onClose={handleCloseModal} storeToEdit={storeToEdit} />
             </Modal>
+
+            <Popover 
+                isOpen={Boolean(guideAnchorEl)} 
+                onClose={handleCloseGuide} 
+                anchorEl={guideAnchorEl}
+                title="Panduan Import Toko via CSV"
+            >
+                <div className="prose prose-invert prose-sm text-slate-300 max-w-none">
+                    <p>Untuk mengimpor beberapa toko sekaligus, siapkan file CSV dengan format berikut:</p>
+                    <ol>
+                        <li>Baris pertama <strong>harus</strong> menjadi header dengan judul kolom <code>name</code> dan <code>level</code>.</li>
+                        <li>Gunakan koma (,) sebagai pemisah.</li>
+                    </ol>
+                    <p className="font-bold">Header Wajib:</p>
+                    <code className="block bg-slate-900 p-2 rounded text-brand-300">name,level</code>
+                    <p className="font-bold">Penjelasan Kolom:</p>
+                    <ul>
+                        <li><code>name</code>: Nama toko yang akan ditambahkan.</li>
+                        <li><code>level</code>: Level toko. Nilai harus salah satu dari: <strong>{STORE_LEVELS.join(', ')}</strong>.</li>
+                    </ul>
+                    <p className="font-bold">Contoh Baris Data:</p>
+                    <pre className="block bg-slate-900 p-2 rounded text-brand-300 overflow-x-auto">
+                        <code>
+                            Toko Sejahtera,Ritel L<br />
+                            Toko Barokah Jaya,Ws 2
+                        </code>
+                    </pre>
+                    <p className="mt-4 text-xs text-yellow-400"><strong>Catatan:</strong> Pastikan penulisan level toko sama persis (termasuk spasi dan huruf besar/kecil) seperti yang dicontohkan.</p>
+                </div>
+            </Popover>
             
             <div className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700">
                 <table className="min-w-full">
