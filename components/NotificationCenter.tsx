@@ -1,15 +1,15 @@
-
 import React, { useEffect } from 'react';
 import { useNotifier } from '../contexts/NotificationContext';
-import { ExclamationTriangleIcon, XMarkIcon } from './icons';
+import { ExclamationTriangleIcon, XMarkIcon, InformationCircleIcon, CheckCircleIcon } from './icons';
 
 const NotificationToast: React.FC<{
     id: string;
     type: 'warning' | 'info' | 'success' | 'error';
     title: string;
     message: string;
+    icon?: React.ReactNode;
     onDismiss: (id: string) => void;
-}> = ({ id, type, title, message, onDismiss }) => {
+}> = ({ id, type, title, message, icon, onDismiss }) => {
     useEffect(() => {
         const timer = setTimeout(() => {
             onDismiss(id);
@@ -24,14 +24,21 @@ const NotificationToast: React.FC<{
         success: 'bg-green-500/10 border-green-500 text-green-300',
         error: 'bg-red-500/10 border-red-500 text-red-300',
     };
+    
+    const DefaultIcons = {
+        warning: <ExclamationTriangleIcon />,
+        info: <InformationCircleIcon />,
+        success: <CheckCircleIcon />,
+        error: <ExclamationTriangleIcon />,
+    };
 
-    const Icon = ExclamationTriangleIcon; // Only warning icon is needed for now
+    const Icon = icon ? icon : DefaultIcons[type];
 
     return (
         <div className={`w-full max-w-sm rounded-lg shadow-lg border p-4 animate-fade-in ${typeClasses[type]}`}>
             <div className="flex items-start">
                 <div className="flex-shrink-0 h-6 w-6">
-                    <Icon />
+                    {Icon}
                 </div>
                 <div className="ml-3 w-0 flex-1">
                     <p className="text-sm font-bold">{title}</p>
@@ -67,6 +74,7 @@ const NotificationCenter: React.FC = () => {
                     type={notification.type}
                     title={notification.title}
                     message={notification.message}
+                    icon={notification.icon}
                     onDismiss={removeNotification}
                 />
             ))}

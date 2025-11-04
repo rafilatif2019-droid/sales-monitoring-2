@@ -3,9 +3,107 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Settings, StoreLevel } from '../types';
+import { Settings, StoreLevel, User } from '../types';
 import { STORE_LEVELS } from '../constants';
-import { ArchiveBoxArrowDownIcon, ArchiveBoxArrowUpIcon, TrashIcon } from '../components/icons';
+import { ArchiveBoxArrowDownIcon, ArchiveBoxArrowUpIcon, TrashIcon, UserCircleIcon, UploadIcon } from '../components/icons';
+
+const ProfileForm: React.FC = () => {
+    const { currentUser, updateCurrentUserData } = useAuth();
+    const [formState, setFormState] = useState({
+        name: '',
+        nik: '',
+        waNumber: '',
+        profilePicture: '',
+    });
+    const [isSaved, setIsSaved] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (currentUser) {
+            setFormState({
+                name: currentUser.name || '',
+                nik: currentUser.nik || '',
+                waNumber: currentUser.waNumber || '',
+                profilePicture: currentUser.profilePicture || '',
+            });
+        }
+    }, [currentUser]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormState(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setFormState(prev => ({...prev, profilePicture: event.target?.result as string }));
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        updateCurrentUserData({
+            name: formState.name,
+            nik: formState.nik,
+            waNumber: formState.waNumber,
+            profilePicture: formState.profilePicture,
+        });
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+    };
+    
+    if (!currentUser) return null;
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-8 bg-slate-800 p-8 rounded-lg">
+            <div>
+                <h3 className="text-xl font-bold mb-4 border-b border-slate-700 pb-2">Profil Saya</h3>
+                <p className="text-sm text-slate-400 mb-6">Kelola informasi personal dan preferensi akun Anda.</p>
+            </div>
+            <div className="flex items-center gap-6">
+                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
+                    {formState.profilePicture ? (
+                        <img src={formState.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                        <UserCircleIcon className="text-slate-500" />
+                    )}
+                </div>
+                <div>
+                     <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-slate-500 transition-colors text-sm">
+                        <UploadIcon />
+                        <span>Ganti Foto</span>
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleImageChange} className="hidden" accept="image/*" />
+                    <p className="text-xs text-slate-400 mt-2">Gunakan foto PNG atau JPG, maks 1MB.</p>
+                </div>
+            </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-1">Nama</label>
+                    <input type="text" id="name" name="name" value={formState.name} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-white" />
+                </div>
+                <div>
+                    <label htmlFor="nik" className="block text-sm font-medium text-slate-300 mb-1">NIK (Nomor Induk Karyawan)</label>
+                    <input type="text" id="nik" name="nik" value={formState.nik} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-white" />
+                </div>
+                <div>
+                    <label htmlFor="waNumber" className="block text-sm font-medium text-slate-300 mb-1">Nomor WhatsApp</label>
+                    <input type="tel" id="waNumber" name="waNumber" value={formState.waNumber} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-white" />
+                </div>
+             </div>
+             <div className="flex justify-end items-center border-t border-slate-700 pt-6">
+              {isSaved && <span className="text-green-400 mr-4 transition-opacity duration-300">Profil disimpan!</span>}
+              <button type="submit" className="bg-brand-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-brand-500 transition-colors">
+                  Simpan Profil
+              </button>
+          </div>
+        </form>
+    );
+};
+
 
 const SettingsPage: React.FC = () => {
   const { settings, updateSettings, backupData, restoreData, resetApp } = useAppContext();
@@ -90,6 +188,8 @@ const SettingsPage: React.FC = () => {
              </div>
            )}
         </div>
+        
+        {currentUser && <ProfileForm />}
 
 
         {/* Core Configuration Form */}

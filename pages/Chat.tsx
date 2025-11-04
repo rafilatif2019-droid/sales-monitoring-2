@@ -101,7 +101,13 @@ const Chat: React.FC = () => {
                 }
             } catch (error) {
                 console.error("Failed to initialize chat:", error);
-                if(isMounted.current) setChatHistory([{ role: 'model', parts: [{ text: "Waduh, sepertinya Selvy lagi ada sedikit kendala nih buat terhubung. Coba refresh halaman ini ya, Rapi." }] }]);
+                let errorMessage = "Waduh, sepertinya Selvy lagi ada sedikit kendala nih buat terhubung. Coba refresh halaman ini ya, Rapi.";
+                
+                if (error instanceof Error && (error.message.includes('API key') || error.message.includes('permission'))) {
+                    errorMessage = "Gagal terhubung ke AI. **Penting:** Sepertinya API Key belum diatur. Jika aplikasi ini di-hosting (misalnya di Vercel), pastikan Rapi sudah mengatur `API_KEY` di **Environment Variables** pada pengaturan project hosting-nya, lalu deploy ulang.";
+                }
+
+                if(isMounted.current) setChatHistory([{ role: 'model', parts: [{ text: errorMessage }] }]);
             } finally {
                 if(isMounted.current) setLoading(false);
             }
@@ -183,8 +189,8 @@ const Chat: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-8rem)] bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-            <header className="p-3 border-b border-slate-700 flex-shrink-0 bg-slate-800 flex items-center gap-3">
+        <div className="flex flex-col flex-1 bg-slate-800 rounded-lg border border-slate-700 shadow-xl animate-fade-in">
+            <header className="p-3 border-b border-slate-700 flex-shrink-0 bg-slate-800 flex items-center gap-3 rounded-t-lg">
                 <div className="w-10 h-10 bg-gradient-to-br from-brand-500 to-brand-700 rounded-full flex-shrink-0"></div>
                 <div>
                     <h2 className="text-lg font-bold text-white">Selvy</h2>
@@ -202,7 +208,7 @@ const Chat: React.FC = () => {
                     <div key={index} className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-xl px-4 py-2 rounded-xl text-white ${
                             msg.role === 'user' 
-                            ? 'bg-teal-700 rounded-br-sm' 
+                            ? 'bg-brand-600 rounded-br-sm' 
                             : 'bg-slate-700 rounded-bl-sm'
                         }`}>
                             {msg.role === 'model' ? <BotMessage text={msg.text} /> : <p className="whitespace-pre-wrap">{msg.text}</p>}
@@ -222,7 +228,7 @@ const Chat: React.FC = () => {
                 )}
                 <div ref={messagesEndRef} />
             </div>
-            <div className="p-4 border-t border-slate-700 bg-slate-800 flex-shrink-0">
+            <div className="p-4 border-t border-slate-700 bg-slate-800 flex-shrink-0 rounded-b-lg">
                 <form onSubmit={handleSubmit} className="flex items-center space-x-3">
                     <input
                         type="text"

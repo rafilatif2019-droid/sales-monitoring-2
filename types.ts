@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum StoreLevel {
@@ -52,17 +53,43 @@ export interface Notification {
     type: 'warning' | 'info' | 'success' | 'error';
     title: string;
     message: string;
+    icon?: React.ReactNode;
 }
+
+export type UserRole = 'user' | 'superuser';
 
 export interface User {
     id: string;
     name: string;
     accessCode: string;
+    role: UserRole;
+    profilePicture?: string; // base64 string
+    nik?: string;
+    waNumber?: string;
 }
+
 
 export interface ChatEntry {
     role: 'user' | 'model';
     parts: { text: string }[]; // Simplified for context storage
+}
+
+// FIX: Add InboxMessage and InboxContextType for the new Inbox feature
+export interface InboxMessage {
+    id: string;
+    senderId: string;
+    senderName: string;
+    senderProfilePicture?: string;
+    text: string;
+    timestamp: number;
+    type: 'standard' | 'broadcast';
+}
+
+export interface InboxContextType {
+    messages: InboxMessage[];
+    sendMessage: (text: string, type: 'standard' | 'broadcast') => void;
+    unreadCount: number;
+    markAsRead: () => void;
 }
 
 export interface AppContextType {

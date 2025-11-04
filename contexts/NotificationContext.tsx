@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { Notification } from '../types';
 
@@ -15,8 +14,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
         const id = new Date().toISOString() + Math.random();
+        // Prevent duplicate notifications
+        if (notifications.some(n => n.title === notification.title && n.message === notification.message)) {
+            return;
+        }
         setNotifications(prev => [...prev, { ...notification, id }]);
-    }, []);
+    }, [notifications]);
 
     const removeNotification = useCallback((id: string) => {
         setNotifications(prev => prev.filter(n => n.id !== id));
